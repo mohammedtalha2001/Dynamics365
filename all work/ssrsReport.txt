@@ -1,0 +1,182 @@
+when the we have to create customize report through extended table fields 
+firstly we create a temp table then a dp class put the following code in that class
+
+[SRSReportParameterAttribute(classstr(MT_POContractClass))]
+class MT_POReportDp extends SrsReportDataProviderPreProcessTempDB
+{
+  
+    MT_POTempTable MT_POTempTable;
+    PurchTable PurchTable;
+    PurchLine obj_PurchLine;
+    MT_POContractClass Contract;
+    RecId _recId;
+
+
+    [SrsReportDataSetAttribute('MT_POTempTable')]
+    public MT_POTempTable GetData()
+    {
+        select * from MT_POTempTable;
+        return MT_POTempTable;
+    }
+
+    public void processReport()
+    {
+        Contract = this.parmDatacontract();
+        _recId = Contract.recId();
+
+        while select PurchTable where PurchTable.RecId == _recId
+            join obj_PurchLine where PurchTable.PurchId == obj_PurchLine.PurchId
+        {
+            MT_POTempTable.PurchaseOrder = PurchTable.PurchOrderFormNum;
+            MT_POTempTable.VendorName = PurchTable.VendorRef;
+            MT_POTempTable.DocumentStatus = PurchTable.MarkupGroup;
+            MT_POTempTable.origin = PurchTable.Email;
+            MT_POTempTable.Currency = PurchTable.CurrencyCode;
+            MT_POTempTable.ItemNumber = PurchTable.ItemBuyerGroupId;
+            MT_POTempTable.ProductName = obj_PurchLine.Name;
+            MT_POTempTable.Unit = obj_PurchLine.PurchUnit;
+            MT_POTempTable.Site = obj_PurchLine.ServiceAddress;
+            MT_POTempTable.UnitPrice =  obj_PurchLine.PriceUnit;
+            MT_POTempTable.insert();
+
+
+        }
+
+        
+    }
+
+}
+
+since in this class we have one parameter that is recid as we all know that the parameter are assigned in contract class so the contract class code is 
+
+[DatacontractAttribute]
+class MT_POContractClass
+{
+    RecId recId;
+
+    [DataMemberAttribute('recId'),
+    SysOperationLabelAttribute(literalstr("recId"))]
+    public RecId recId(RecId _recId = recId)
+    {
+        recId = _recId;
+        return recId;
+    
+    }
+
+}
+
+now the parameters value means the recid should be the recid of current selected record so that the report of that recid would print 
+so to do that set the value of recid in the controller class the controller class code would be
+
+class MT_POController extends ProjectReportsController
+{
+     
+    public static void main(Args args)
+    {
+        PurchTable PurchTable;
+        RecId _recId;
+        MT_POContractClass MT_POContractClass;
+        MT_POController controller = new MT_POController();
+        MT_POContractClass Contract = new MT_POContractClass();
+
+        // Set the Current Rec Id to Contract Class Object
+        purchTable = args.record() as PurchTable;
+        Contract.recId(purchTable.RecId);
+        //set the report name and report design to run
+        controller.parmReportName(ssrsReportStr(MT_POReport,Design));
+        controller.parmReportContract().parmRdpContract(Contract);
+        
+        // Prevent the report dialog to show
+        controller.parmShowDialog(false);
+
+        //execute the report
+        controller.startOperation();
+    }
+
+}
+
+
+
+if we want to insert data through query builder form then there is dp class code 
+[SRSReportParameterAttribute(classstr(MT_SMContractPrecision))]
+class MT_SMDpPrecision extends SrsReportDataProviderPreProcessTempDB
+{
+    MT_SMTempPrecisionSSRS obj_MT_SMTempPrecisionSSRS;
+    MT_SMContractPrecision Contract;
+    MT_SMStudentId _STUDENTID;
+    MT_SMMonths _MONTH;
+    MT_SMStudentFeeVoucherTable Obj_MT_SMStudentFeeVoucherTable;
+    MT_SMStudentTable obj_MT_SMStudentTable;
+    
+
+    [SrsReportDataSetAttribute('MT_SMTempPrecisionSSRS')]
+   public MT_SMTempPrecisionSSRS GetData()
+    {
+        select * from obj_MT_SMTempPrecisionSSRS;
+        return obj_MT_SMTempPrecisionSSRS;
+    }
+
+    public void processReport()
+    {
+        Contract = this.parmDatacontract();
+        _STUDENTID = Contract.student();
+        _MONTH = Contract.month();
+
+        Query query;
+        QueryBuildDataSource qbds, qbds1;
+        QueryBuildRange qbr,qbr1;
+        //QueryBuildRange qbr1;
+        QueryRun queryrun;
+        
+
+
+        query = new Query();
+        qbds = query.addDataSource(tableNum(MT_SMStudentFeeVoucherTable));
+        if(_STUDENTID)
+        {
+            qbr = qbds.addRange(fieldNum(MT_SMStudentFeeVoucherTable,StudentId));
+            qbr.value(_STUDENTID);
+        }
+        qbr = qbds.addRange(fieldNum(MT_SMStudentFeeVoucherTable,Months));
+        qbr.value(enum2Str(_MONTH));
+        qbds1= qbds.addDataSource(tableNum(MT_SMStudentTable));
+        qbds1.relations(true);
+        qbds.joinMode(Joinmode::InnerJoin);
+        queryRun = new QueryRun(query);
+
+        while(queryRun.next())
+        {
+            Obj_MT_SMStudentFeeVoucherTable = queryRun.get(tableNum(MT_SMStudentFeeVoucherTable));
+            obj_MT_SMStudentTable = queryRun.get(tableNum(MT_SMStudentTable));
+            obj_MT_SMTempPrecisionSSRS.FeeVoucherId = Obj_MT_SMStudentFeeVoucherTable.FeeVoucherId;
+            obj_MT_SMTempPrecisionSSRS.StudentId = obj_MT_SMStudentTable.StudentId;
+            obj_MT_SMTempPrecisionSSRS.Name = obj_MT_SMStudentTable.Name;
+            obj_MT_SMTempPrecisionSSRS.Months = Obj_MT_SMStudentFeeVoucherTable.Months;
+            obj_MT_SMTempPrecisionSSRS.insert();
+
+        }
+      
+
+
+
+           
+        //while
+        //    select Obj_MT_SMStudentCourseTable
+        //    where Obj_MT_SMStudentCourseTable.CourseId == _COURSEID
+        //    join obj_MT_SMCourseTable where obj_MT_SMCourseTable.CourseId == Obj_MT_SMStudentCourseTable.CourseId
+        //    join obj_MT_SMStudentTable where obj_MT_SMStudentTable.StudentId == Obj_MT_SMStudentCourseTable.StudentId
+        //    join obj_MT_SMSemesterTable where obj_MT_SMSemesterTable.SemesterId == Obj_MT_SMStudentCourseTable.SemesterId
+        
+        //{
+        //    obj_MT_SMTempTableSSRS.CourseId = obj_MT_SMCourseTable.CourseId;
+        //    obj_MT_SMTempTableSSRS.StudentCourseId = Obj_MT_SMStudentCourseTable.StudentCourseId;
+        //    obj_MT_SMTempTableSSRS.StudentName = obj_MT_SMStudentTable.Name;
+        //    obj_MT_SMTempTableSSRS.CourseName = obj_MT_SMCourseTable.Name;
+        //    obj_MT_SMTempTableSSRS.Semester = obj_MT_SMSemesterTable.Semester;
+        //    obj_MT_SMTempTableSSRS.insert();
+        //}
+
+
+    }
+
+}

@@ -1,0 +1,255 @@
+Step 1:
+Create Status Enum --- add the enum in the table where u want to create workflow
+
+Step 2:
+add the enum in the table where u want to create workflow
+
+Step 3:
+add canSubmitToWorkflow method to table method and UpdateCustWorkflowState add the following code:
+public class MT_SMStudentTable extends common
+{
+
+    public boolean canSubmitToWorkflow(str _workflowType = '')
+    {
+        boolean canSubmit = false;
+        MT_SMStudentTable MT_SMStudentTable;
+        if (MT_SMStudentTable.RecId &&
+            MT_SMStudentTable.workflowstatus == MT_SMworkflowstatus::NotSubmitted)
+        {
+            canSubmit = true;
+        }
+
+        return canSubmit;
+    }
+
+    static void UpdateWorkflowStatus(RefRecId _recId, MT_SMworkflowstatus _status)
+    {
+        MT_SMStudentTable MT_SMStudentTable;
+
+        MT_SMStudentTable = MT_SMStudentTable::findRecId(_recId, true);
+
+        ttsBegin;
+        MT_SMStudentTable.workflowstatus = _status;
+        MT_SMStudentTable.update();
+        ttsCommit;
+    }
+
+    static MT_SMStudentTable findRecId(RecId    _recId,
+                               boolean  _forUpdate = false)
+    {
+        MT_SMStudentTable MT_SMStudentTable;
+    
+        if (_recId)
+        {
+            MT_SMStudentTable.selectForUpdate(_forUpdate);
+    
+            select firstonly MT_SMStudentTable
+                where MT_SMStudentTable.RecId == _recId;
+        }
+    
+        return MT_SMStudentTable;
+    }
+
+}
+
+Step 4:
+we create a simple query and add that table in the datasource
+
+Step 5:
+we create a workflow type , where 3 classes and 3 action menu item will be created
+
+step 6:
+create a workflow category add properties of category where module=Customers
+
+step 7:
+now enable workflow in form on that table and add workflow type and workflow datasource in form design properties 
+
+step8:
+now add the following in submit manager class that has been created after creating workflow type
+/// <summary>
+/// The MT_SMStudentAgreementWfTypeSubmitManager menu item action event handler.
+/// </summary>
+public class MT_SMStudentAgreementWfTypeSubmitManager 
+{
+    public static void main(Args _args)
+	{
+		//  TODO:  Write code to execute once a work item is submitted.
+       
+        MT_SMStudentAgreementWfTypeSubmitManager submitManager;
+
+        submitManager = new MT_SMStudentAgreementWfTypeSubmitManager();
+        submitManager.submit(_args);
+	}
+
+    public void submit(Args _args)
+    {
+        RecId                 _recId;
+        WorkflowCorrelationId _workflowCorrelationId;
+        workflowTypeName      _workflowTypeName;
+        WorkflowComment       _initialNote;
+        WorkflowSubmitDialog  workflowSubmitDialog;
+
+        _recId = _args.record().RecId;
+        _workflowTypeName = workFlowTypeStr("MT_SMStudentAgreementWfType");
+        _initialNote = "";
+
+        // Opens the submit to workflow dialog.
+        workflowSubmitDialog = WorkflowSubmitDialog::construct(
+    _args.caller().getActiveWorkflowConfiguration());
+
+        workflowSubmitDialog.run();
+
+        if (workflowSubmitDialog.parmIsClosedOK())
+        {
+            _recId = _args.record().RecId;
+            // Get comments from the submit to workflow dialog.
+            _initialNote = workflowSubmitDialog.parmWorkflowComment();
+
+            try
+            {
+                ttsbegin;
+
+                _workflowCorrelationId = Workflow::activateFromWorkflowType(
+        _workflowTypeName, _recId, _initialNote, NoYes::No);
+
+                ttscommit;
+
+                // Updates the workflow button to diplay Actions instead of Submit.
+                _args.caller().updateWorkflowControls();
+
+                info("Submitted to workflow.");
+            }
+            catch(exception::Error)
+            {
+                error("Error on workflow activation.");
+            }
+        }
+    }
+
+}
+
+
+step9:
+create a workflow approval add the document menu item of your form, document name that has created with wftype and a field group of your table
+
+step 10:
+add he following code to wftype event handler class that has already created
+/// <summary>
+/// The MT_SMStudentAgreementWfTypeEventHandler workflow event handler.
+/// </summary>
+public class  MT_SMStudentAgreementWfTypeEventHandler implements WorkflowCanceledEventHandler,  
+	WorkflowCompletedEventHandler,
+	WorkflowStartedEventHandler
+{
+    public void started(WorkflowEventArgs _workflowEventArgs)
+	{
+		// TODO:  Write code to execute once the workflow is started.
+        MT_SMStudentTable::UpdateWorkflowStatus(
+    _workflowEventArgs.parmWorkflowContext().parmRecId(),
+    MT_SMworkflowstatus::Submitted);
+	}
+
+    public void canceled(WorkflowEventArgs _workflowEventArgs)
+	{
+		// TODO:  Write code to execute once the workflow is canceled.
+        MT_SMStudentTable::UpdateWorkflowStatus(
+    _workflowEventArgs.parmWorkflowContext().parmRecId(),
+    MT_SMworkflowstatus::Cancel);
+	}
+
+    public void completed(WorkflowEventArgs _workflowEventArgs)
+	{
+		// TODO:  Write code to execute once the workflow is completed.
+        MT_SMStudentTable::UpdateWorkflowStatus(
+    _workflowEventArgs.parmWorkflowContext().parmRecId(),
+    MT_SMworkflowstatus::Completed);
+	}
+
+}
+
+step 11: 
+add the following code to approval event handler class
+/// <summary>
+/// The MT_SMStudentWorkflowApprovalEventHandler workflow outcome event handler.
+/// </summary>
+public final class MT_SMStudentWorkflowApprovalEventHandler implements WorkflowElementCanceledEventHandler,
+	WorkflowElemChangeRequestedEventHandler,
+	WorkflowElementCompletedEventHandler,
+	WorkflowElementReturnedEventHandler,
+	WorkflowElementStartedEventHandler,
+	WorkflowElementDeniedEventHandler,
+	WorkflowWorkItemsCreatedEventHandler
+{
+    public void started(WorkflowElementEventArgs _workflowElementEventArgs)
+	{
+		// TODO:  Write code to execute once the workflow is started.
+        MT_SMStudentTable::UpdateWorkflowStatus(
+    _workflowElementEventArgs.parmWorkflowContext().parmRecId(),
+    MT_SMworkflowstatus::Submitted);
+	}
+
+    public void canceled(WorkflowElementEventArgs _workflowElementEventArgs)
+	{
+		// TODO:  Write code to execute once the workflow is canceled.
+        MT_SMStudentTable::UpdateWorkflowStatus(
+    _workflowElementEventArgs.parmWorkflowContext().parmRecId(),
+    MT_SMworkflowstatus::Cancel);
+	}
+
+    public void completed(WorkflowElementEventArgs _workflowElementEventArgs)
+	{
+		// TODO:  Write code to execute once the workflow is completed.
+        MT_SMStudentTable::UpdateWorkflowStatus(
+    _workflowElementEventArgs.parmWorkflowContext().parmRecId(),
+    MT_SMworkflowstatus::Approved);
+	}
+
+    public void denied(WorkflowElementEventArgs _workflowElementEventArgs)
+	{
+		// TODO:  Write code to execute once the workflow is denied.
+        MT_SMStudentTable::UpdateWorkflowStatus(
+    _workflowElementEventArgs.parmWorkflowContext().parmRecId(),
+    MT_SMworkflowstatus::Rejected);
+	}
+
+    public void changeRequested(WorkflowElementEventArgs _workflowElementEventArgs)
+	{
+		// TODO:  Write code to execute once change is requested for the workflow.
+        MT_SMStudentTable::UpdateWorkflowStatus(
+    _workflowElementEventArgs.parmWorkflowContext().parmRecId(),
+    MT_SMworkflowstatus::ChangeRequest);
+	}
+
+    public void returned(WorkflowElementEventArgs _workflowElementEventArgs)
+	{
+		// TODO:  Write code to execute once the workflow is returned.
+	}
+
+    public void created(WorkflowWorkItemsEventArgs _workflowWorkItemsEventArgs)
+	{
+		// TODO:  Write code to execute once work items are created.
+      
+	}
+
+}
+
+
+step 12:
+add the new element to started element node in workflow type and add the element name the wftype properties the element should be same as the wf approval name 
+
+step 13 :
+last but not the least add design to the workflow:
+1. Navigate to Accounts receivable > Setup > Accounts receivable workflows.
+2. Create a new workflow instance of the workflow type you created.
+3. Define the states from Start to End of the workflow.
+4. Drag approval element from Toolbox on the left to the Designer pane on the right.
+5. Connect the bottom of Start state with top of the Approval element.
+6. Connect the bottom of Approval element to the top of End state.
+7. Resolve any errors and warnings by setting workflow and approval element properties.
+8. Activate it.
+
+
+
+
+
+

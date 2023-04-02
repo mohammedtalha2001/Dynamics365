@@ -1,0 +1,147 @@
+for running batch job there would be three classes that u have to create 
+one is sysOperationController second one is SysOperationContract and the last one would be the SysOperationService
+here the code for sysOperationController
+
+class MT_SMSysOperationController extends SysOperationServiceController
+{
+    protected void new()
+    {
+        super(classStr(MT_SMSysOperationService), methodStr(MT_SMSysOperationService, process), SysOperationExecutionMode::Synchronous);
+    }
+
+    public ClassDescription defaultCaption()
+    {
+        return "Process Job";
+    }
+
+    public static MT_SMSysOperationController construct(SysOperationExecutionMode _executionMode = SysOperationExecutionMode::Synchronous)
+    {
+        MT_SMSysOperationController controller;
+        controller = new MT_SMSysOperationController();
+        controller.parmExecutionMode(_executionMode);
+        return controller;
+    }
+
+    public static void main(Args _args)
+    {
+        MT_SMSysOperationController controller;
+        controller = MT_SMSysOperationController::construct();
+        controller.parmArgs(_args);
+        controller.startOperation();
+    }
+
+}
+
+Code for SysOperationContract
+[DataContractAttribute]
+class MT_SMSysOperationContract
+{
+
+}
+
+in this code you may add parameter according to your requirements then these parms would easily be accessable in service class 
+
+the sysOperationService class code is given by 
+class MT_SMSysOperationService extends SysOperationServiceBase
+{
+    MT_SMStudentTable MT_SMStudentTable;
+    MT_SMStudentFeeVoucherTable MT_SMStudentFeeVoucherTable;
+    str monthName = mthName(mthOfYr(today())-1);
+    int i;
+    public void process()
+    {
+        Info(enum2Str(MT_SMStudentFeeVoucherTable.Months));
+        //print(enum2Str(MT_SMStudentFeeVoucherTable.Months));
+        //Info(enum2Str(MT_SMStudentFeeVoucherTable.Months));
+        //Info(strFmt("original",monthName));
+        //print("*************");
+        //info("*************");
+        //Info(monthName);
+        //print(monthName);
+        Info("before while");
+        
+        //while
+        //select forupdate MT_SMStudentTable join MT_SMStudentFeeVoucherTable where MT_SMStudentTable.StudentId==MT_SMStudentFeeVoucherTable.StudentId
+        ttsbegin;
+        while select MT_SMStudentFeeVoucherTable join forupdate MT_SMStudentTable where MT_SMStudentTable.StudentId == MT_SMStudentFeeVoucherTable.StudentId
+        {
+            info("after while");
+            if (enum2Str(MT_SMStudentFeeVoucherTable.Months) ==  monthName && MT_SMStudentTable.StudentStatus == MT_SMStudentStatus::None)
+            {
+                if(MT_SMStudentFeeVoucherTable.Status == MT_SMStatus::Unpaid)
+                {
+                    i+=1;
+                    MT_SMStudentTable.StudentStatus = MT_SMStudentStatus::warning;
+                
+                }
+                else
+                {
+                    i+=1;
+                    MT_SMStudentTable.StudentStatus = MT_SMStudentStatus::None;
+                
+                }
+            }
+            if (enum2Str(MT_SMStudentFeeVoucherTable.Months) ==  monthName && MT_SMStudentTable.StudentStatus == MT_SMStudentStatus::warning)
+            {
+                if(MT_SMStudentFeeVoucherTable.Status == MT_SMStatus::Unpaid)
+                {
+                    i+=1;
+                    MT_SMStudentTable.StudentStatus = MT_SMStudentStatus::Blocked;
+                
+                }
+                else
+                {
+                    i+=1;
+                    MT_SMStudentTable.StudentStatus = MT_SMStudentStatus::None;
+                
+                }
+            }
+            if (enum2Str(MT_SMStudentFeeVoucherTable.Months) ==  mthName(mthOfYr(today())) && MT_SMStudentTable.StudentStatus == MT_SMStudentStatus::Blocked)
+            {
+                if(MT_SMStudentFeeVoucherTable.Status == MT_SMStatus::Unpaid)
+                {
+                    i+=1;
+                    MT_SMStudentTable.StudentStatus = MT_SMStudentStatus::Blocked;
+                
+                }
+                else
+                {
+                    i+=1;
+                    MT_SMStudentTable.StudentStatus = MT_SMStudentStatus::None;
+                
+                }
+
+            }
+            if (enum2Str(MT_SMStudentFeeVoucherTable.Months) ==  mthName(mthOfYr(today())) && MT_SMStudentTable.StudentStatus == MT_SMStudentStatus::warning)
+            {
+                if(enum2Str(MT_SMStudentFeeVoucherTable.Months) ==  monthName)
+                {
+            
+                    if(MT_SMStudentFeeVoucherTable.Status == MT_SMStatus::Unpaid)
+                    {
+                        i+=1;
+                        MT_SMStudentTable.StudentStatus = MT_SMStudentStatus::Blocked;
+                
+                    }
+                    else
+                    {
+                        i+=1;
+                        MT_SMStudentTable.StudentStatus = MT_SMStudentStatus::None;
+                
+                    }
+                }
+
+            }
+            MT_SMStudentTable.update();
+        }
+        ttscommit;
+        info(strfmt("total records updated : %1",i));
+       
+ 
+       
+    }
+
+}
+
+
+in the action menu item you have to add controller class 
