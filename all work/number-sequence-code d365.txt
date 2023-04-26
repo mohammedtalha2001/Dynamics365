@@ -1,0 +1,159 @@
+// Number Sequence Module
+
+// Step 0: Create an EDT which you want to create an enum , in this case I have created 2 EDT , SemesterId and CourseId
+// respectively
+
+// Step 1: Create extension of enum of NumberSeqModule
+
+// Step 2: Add new value in enum
+
+// Step 3: Create a class which extends NumberSeqApplicationModule
+
+class SMNumberSeqModule extends NumberSeqApplicationModule
+{
+
+}
+
+// Step 4: After creating class override the loadModule Method in class and paste this code
+
+public void loadModule()
+    {
+        NumberSeqDatatype datatype = NumberSeqDatatype::construct();
+        
+        //Number Sequence Semester Id
+        datatype.parmDatatypeId(extendedTypeNum(SemesterId));
+        datatype.parmReferenceHelp(literalStr("@SchoolManagement:SemesterId"));
+        datatype.parmWizardIsContinuous(false);
+        datatype.parmWizardIsManual(NoYes::No);
+        datatype.parmWizardIsChangeDownAllowed(NoYes::Yes);
+        datatype.parmWizardIsChangeUpAllowed(NoYes::Yes);
+        datatype.parmSortField(1);
+        datatype.parmWizardLowest(1);
+        datatype.parmWizardHighest(999999);
+
+        datatype.addParameterType(NumberSeqParameterType::DataArea, true, false);
+        this.create(datatype);
+
+        //Number Sequence Course Id
+        datatype.parmDatatypeId(extendedTypeNum(CourseId));
+        datatype.parmReferenceHelp(literalStr("@SchoolManagement:CourseId"));
+        datatype.parmWizardIsContinuous(false);
+        datatype.parmWizardIsManual(NoYes::No);
+        datatype.parmWizardIsChangeDownAllowed(NoYes::No);
+        datatype.parmWizardIsChangeUpAllowed(NoYes::Yes);
+        datatype.parmSortField(2);
+        datatype.parmWizardLowest(1);
+        datatype.parmWizardHighest(999999);
+
+        datatype.addParameterType(NumberSeqParameterType::DataArea, true, false);
+        this.create(datatype);
+    }
+
+// Step 5: create a method in class which would return NumberSeqModule enum which you created in step 1.
+
+// paste this code in class
+
+public NumberSeqModule numberSeqModule()
+    {
+        return NumberSeqModule::SchoolManagemnetNumberSequence;
+    }
+
+// Step 6: create a delegate of class NumberSeq Global
+
+// Paste this code in class
+
+    [SubscribesTo(classstr(NumberSeqGlobal),delegatestr(NumberSeqGlobal,buildModulesMapDelegate))]
+    static void buildModulesMapSubsciber(Map numberSeqModuleNamesMap)
+    {
+        NumberSeqGlobal::addModuleToMap(classnum(SMNumberSeqModule), numberSeqModuleNamesMap);
+    }
+
+
+// Step 7: if you want to use number sequence edt in inserting data in table or updating the data or any batch job then 
+// Add this method in class (It is not necessary for number sequence to work)
+
+// Paste this code
+
+static numberSequenceReference numRefSemesterId()
+    {
+        return NumberSeqReference::findReference(extendedTypeNum(SemesterId));
+    }
+ 
+
+// Complete Code
+
+
+class SMNumberSeqModule extends NumberSeqApplicationModule
+{
+    public void loadModule()
+    {
+        NumberSeqDatatype datatype = NumberSeqDatatype::construct();
+        
+        //Number Sequence Semester Id
+        datatype.parmDatatypeId(extendedTypeNum(SemesterId));
+        datatype.parmReferenceHelp(literalStr("@SchoolManagement:SemesterId"));
+        datatype.parmWizardIsContinuous(false);
+        datatype.parmWizardIsManual(NoYes::No);
+        datatype.parmWizardIsChangeDownAllowed(NoYes::Yes);
+        datatype.parmWizardIsChangeUpAllowed(NoYes::Yes);
+        datatype.parmSortField(1);
+        datatype.parmWizardLowest(1);
+        datatype.parmWizardHighest(999999);
+
+        datatype.addParameterType(NumberSeqParameterType::DataArea, true, false);
+        this.create(datatype);
+
+        //Number Sequence Course Id
+        datatype.parmDatatypeId(extendedTypeNum(CourseId));
+        datatype.parmReferenceHelp(literalStr("@SchoolManagement:CourseId"));
+        datatype.parmWizardIsContinuous(false);
+        datatype.parmWizardIsManual(NoYes::No);
+        datatype.parmWizardIsChangeDownAllowed(NoYes::No);
+        datatype.parmWizardIsChangeUpAllowed(NoYes::Yes);
+        datatype.parmSortField(2);
+        datatype.parmWizardLowest(1);
+        datatype.parmWizardHighest(999999);
+
+        datatype.addParameterType(NumberSeqParameterType::DataArea, true, false);
+        this.create(datatype);
+    }
+
+    public NumberSeqModule numberSeqModule()
+    {
+        return NumberSeqModule::SchoolManagemnetNumberSequence;
+    }
+
+    ///
+    ///    Appends the current class to the map that links modules to number sequence data type generators.
+    ///
+
+    [SubscribesTo(classstr(NumberSeqGlobal),delegatestr(NumberSeqGlobal,buildModulesMapDelegate))]
+    static void buildModulesMapSubsciber(Map numberSeqModuleNamesMap)
+    {
+        NumberSeqGlobal::addModuleToMap(classnum(SMNumberSeqModule), numberSeqModuleNamesMap);
+    }
+
+    static numberSequenceReference numRefFeeVoucherId()
+    {
+        return NumberSeqReference::findReference(extendedTypeNum(FeeVoucherId));
+    }
+}
+
+
+// Step 8: Create a runnable class and call the load module method in class
+
+// Paste this code in class , make sure to change the name of class , in our case class name is LoadMyModule
+
+class LoadMyModule
+{
+    /// <summary>
+    /// Runs the class with the specified arguments.
+    /// </summary>
+    /// <param name = "_args">The specified arguments.</param>
+    public static void main(Args _args)
+    {
+        smnumberseqmodule numberseq = new smnumberseqmodule();
+        numberseq.loadmodule();
+    }
+
+}
