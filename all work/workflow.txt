@@ -55,17 +55,23 @@ public class MT_SMStudentTable extends common
 Step 4:
 we create a simple query and add that table in the datasource
 
-Step 5:
-we create a workflow type , where 3 classes and 3 action menu item will be created
 
 step 6:
-create a workflow category add properties of category where module=Customers
+create a workflow category add properties of category where module=Customers or what ever your working with
+and add its label
+
+Step 5:
+we create a workflow type , where 3 classes and 3 action menu item will be created
+Category = category that you created
+Query =  query that you made 
+Document Menu item = Your form menu item on which Workflow button will appear
 
 step 7:
 now enable workflow in form on that table and add workflow type and workflow datasource in form design properties 
 
 step8:
-now add the following in submit manager class that has been created after creating workflow type
+now add the following code in submit manager class that has been created after creating workflow type
+
 /// <summary>
 /// The MT_SMStudentAgreementWfTypeSubmitManager menu item action event handler.
 /// </summary>
