@@ -136,7 +136,11 @@ public class MT_SMStudentAgreementWfTypeSubmitManager
 
 
 step9:
-create a workflow approval add the document menu item of your form, document name that has created with wftype and a field group of your table
+create a workflow approval 
+In workflow approval wizard:
+Workflow Document = Ducument that created after creating workflow type
+Document perview field group = field group of your table 
+Document Menu item = Menu item of your form that have workflow
 
 step 10:
 add he following code to wftype event handler class that has already created
