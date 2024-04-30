@@ -245,9 +245,15 @@ public final class MT_SMStudentWorkflowApprovalEventHandler implements WorkflowE
 
 
 step 12:
-add the new element to started element node in workflow type and add the element name the wftype properties the element should be same as the wf approval name 
+add the new element to Supported element node in workflow type and add the element name in the wftype properties the element should be same as the wf approval name 
+Step 13:
+Enable workflow in form design 
+Add workflow datasource
+add workflow type 
+enable workflow
 
-step 13 :
+
+step 14 :
 last but not the least add design to the workflow:
 1. Navigate to Accounts receivable > Setup > Accounts receivable workflows.
 2. Create a new workflow instance of the workflow type you created.
