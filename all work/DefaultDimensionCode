@@ -1,0 +1,73 @@
+class DefaultDimensionTesting
+{
+
+
+    /// <summary>
+    /// Runs the class with the specified arguments.
+    /// </summary>
+    /// <param name = "_args">The specified arguments.</param>
+    public static void main(Args _args)
+    {
+        DimensionAttributeSetItem dimAttrSetItem;
+        DimensionAttribute dimAttrList;
+        DimensionEnumeration dimensionSetId;
+        DimensionAttribute  dimAttr;
+
+        int dimAttrCount;
+
+        DimensionAttributeValueSetStorage dimStorage;
+        Counter i;
+        str returnValue;
+        container conDimName;
+        container conDimValues;
+
+        dimensionSetId = DimensionCache::getDimensionAttributeSetForLedger();
+
+        select count(RecId) from dimAttr
+            where dimAttr.Type != DimensionAttributeType::MainAccount
+            join RecId from dimAttrSetItem
+            where dimAttrSetItem.DimensionAttribute == dimAttr.RecId &&
+            dimAttrSetItem.DimensionAttributeSet == dimensionSetId;
+
+        info(strFmt("Total active financial dimensions for current legal entity: %1", dimAttr.RecId));
+        dimStorage = DimensionAttributeValueSetStorage::find(22565439740);
+
+        while select * from dimAttr
+            order by Name
+            where dimAttr.Type != DimensionAttributeType::MainAccount
+            join RecId from dimAttrSetItem
+            where dimAttrSetItem.DimensionAttribute == dimAttr.RecId &&
+            dimAttrSetItem.DimensionAttributeSet == dimensionSetId
+        {
+            info(dimAttr.Name);
+            conDimName += dimAttr.Name;
+            for (i=1 ; i<= dimStorage.elements() ; i++)
+            {
+                if(DimensionAttribute::find(dimStorage.getAttributeByIndex(i)).Name == dimAttr.Name)
+                {
+                    returnValue = dimStorage.getDisplayValueByIndex(i);
+                    conDimValues += dimStorage.getDisplayValueByIndex(i);
+                    break;
+                }
+            }
+        }
+        str dimNames = con2Str(conDimName);
+        str dimValues = con2Str(conDimValues);
+
+        Info(dimNames);
+        Info(dimValues);
+
+        DimensionSetEntity  DimensionSetEntity;
+        select  DimensionSetEntity where DimensionSetEntity.RecordId == 22565421982;
+
+        Info(DimensionSetEntity.DisplayValue);
+
+        DimensionAttributeValueSetStorage dimStorage;
+        dimStorage = DimensionAttributeValueSetStorage::find(22565421982);
+        dimStorage.getDisplayValueByDimensionAttribute(DimensionAttribute::findByName("BusinessUnit").RecId);
+
+        Info(any2Str(dimStorage));
+        
+    }
+
+}
