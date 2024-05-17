@@ -71,3 +71,15 @@ class DefaultDimensionTesting
     }
 
 }
+
+In case you want to show lookup of dimensionValue for specific dimension use this code
+public void lookup(FormControl _formControl, str _filterStr)
+            {
+                PurchParameters     purchParameters;
+
+                super(_formControl, _filterStr);
+
+                select ATI_DTWFApprovalDimensionAttribute from purchParameters;
+                //In second arg give attr name
+                LedgerMatrixReportHelper_CN::dimensionValueLookup(_formControl, purchParameters.ATI_DTWFApprovalDimensionAttribute);
+            }
