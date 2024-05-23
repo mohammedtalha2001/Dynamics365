@@ -83,3 +83,6 @@ public void lookup(FormControl _formControl, str _filterStr)
                 //In second arg give attr name
                 LedgerMatrixReportHelper_CN::dimensionValueLookup(_formControl, purchParameters.ATI_DTWFApprovalDimensionAttribute);
             }
+
+If you want to show drop down that shows all the Attribute Names in it then you have to bind the below relation with your field
+PurchParameter.ATI_DimensionAttrName == DimensionAttribute.Name
