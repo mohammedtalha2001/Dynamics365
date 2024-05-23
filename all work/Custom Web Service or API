@@ -1,0 +1,296 @@
+Custom Webservice in d365 fo
+We need to create APIs for inserting and getting data from table 
+For that we created three classes one for Request , second for Response and the third one is Service class
+
+Service class code:
+
+public class IMZWMSPickingRouteService
+{
+    public IMZJsonResponse getPickingRoutes(IMZWMSPickingRouteRequest _request)
+    {
+        IMZJsonResponse                 response        = new IMZJsonResponse();
+        IMZWMSPickingRouteResponse      listResponse    = new IMZWMSPickingRouteResponse();
+        //IMZPickingRoutesViewQuery       obj             = new IMZPickingRoutesViewQuery();
+        str                             jsonString;
+        List                            dataMainList    = new List(Types::Class);
+        WMSPickingRouteID               pickingRouteId  = _request.parmPickingRouteId();
+        WMSPickingTmp                   pickingTmp;
+        WMSPickingRoute                 pickingRoute;
+        IMZwmsPickingRoutesAgg          imzWMSPickingRoutesAgg;
+        Query                           query;
+        QueryBuildDataSource            qbds;
+        QueryRun                        queryrun;
+
+        
+        try
+        {
+            if(pickingRouteId)
+            {
+                select firstonly pickingRoute
+                where pickingRoute.pickingRouteID == pickingRouteId;
+                if(!pickingRoute.pickingRouteID)
+                {
+                    throw error('@Burco:InvalidPickingRouteID');
+                }
+            }
+            if(pickingRouteId)
+            {
+                select firstonly imzWMSPickingRoutesAgg 
+                    where imzWMSPickingRoutesAgg.pickingRouteID == pickingRouteId;
+
+                listResponse.parmPickingRouteID(imzWMSPickingRoutesAgg.pickingRouteID);
+                listResponse.parmDeliveryName(imzWMSPickingRoutesAgg.DeliveryName);
+                listResponse.parmDlvModeId(imzWMSPickingRoutesAgg.DlvModeId);
+                listResponse.parmTransRefId(imzWMSPickingRoutesAgg.transRefId);
+                listResponse.parmOrderQty(imzWMSPickingRoutesAgg.OrderQty);
+                listResponse.parmPickedQty(imzWMSPickingRoutesAgg.PickedQty);
+                listResponse.parmBackOrderInd(imzWMSPickingRoutesAgg.BackOrderInd);
+                listResponse.parmGloInd(imzWMSPickingRoutesAgg.GloInd);
+                listResponse.parmRackInd(imzWMSPickingRoutesAgg.RackInd);
+                listResponse.parmTruckOrderInd(imzWMSPickingRoutesAgg.TruckOrderInd);
+                listResponse.parmException(imzWMSPickingRoutesAgg.Exception);
+                listResponse.parmExceptionItem(imzWMSPickingRoutesAgg.ExceptionItem);
+                listResponse.parmNotes(strReplace(imzWMSPickingRoutesAgg.Notes,'\"', '\''));
+                listResponse.parmCustNotes(strReplace(imzWMSPickingRoutesAgg.CustNotes,'\"','\''));
+                listResponse.parmSalesShippingDateRequested(imzWMSPickingRoutesAgg.ShippingDateRequested);
+
+                dataMainList.addEnd(listResponse);
+
+            }
+            else
+            {
+                while
+                    select imzWMSPickingRoutesAgg
+                {
+                    
+                    listResponse = new IMZWMSPickingRouteResponse(); // creates new instance every time cuz only one time initialization overide all the previous data
+                    listResponse.parmPickingRouteID(imzWMSPickingRoutesAgg.pickingRouteID);
+                    listResponse.parmDeliveryName(imzWMSPickingRoutesAgg.DeliveryName);
+                    listResponse.parmDlvModeId(imzWMSPickingRoutesAgg.DlvModeId);
+                    listResponse.parmTransRefId(imzWMSPickingRoutesAgg.transRefId);
+                    listResponse.parmOrderQty(imzWMSPickingRoutesAgg.OrderQty);
+                    listResponse.parmPickedQty(imzWMSPickingRoutesAgg.PickedQty);
+                    listResponse.parmBackOrderInd(imzWMSPickingRoutesAgg.BackOrderInd);
+                    listResponse.parmGloInd(imzWMSPickingRoutesAgg.GloInd);
+                    listResponse.parmRackInd(imzWMSPickingRoutesAgg.RackInd);
+                    listResponse.parmTruckOrderInd(imzWMSPickingRoutesAgg.TruckOrderInd);
+                    listResponse.parmException(imzWMSPickingRoutesAgg.Exception);
+                    listResponse.parmExceptionItem(imzWMSPickingRoutesAgg.ExceptionItem);
+                    listResponse.parmNotes(strReplace(imzWMSPickingRoutesAgg.Notes,'\"', '\''));
+                    listResponse.parmCustNotes(strReplace(imzWMSPickingRoutesAgg.CustNotes,'\"','\''));
+                    listResponse.parmSalesShippingDateRequested(imzWMSPickingRoutesAgg.ShippingDateRequested);
+
+                    dataMainList.addEnd(listResponse);
+
+                }
+            }
+
+            jsonString = FormJsonSerializer::serializeClass(dataMainList);
+            jsonString = strReplace(jsonString, "\\", "");
+        }
+        catch (Exception::CLRError)
+        {
+            System.Exception interopException = CLRInterop::getLastException();
+           
+            response.parmSuccess(false);
+            response.parmErrorMessage(interopException.ToString());
+        }
+        response = new IMZJsonResponse();
+        response.parmData(jsonString);
+        response.parmSuccess(true);
+        return response;
+    }
+}
+
+
+
+public class IMZWMSPickingService
+{
+    public IMZPickingRecErrResponse createPickingRecords(IMZHeaderContract _request)
+    {
+        IMZPickingRecErrResponse    response = new IMZPickingRecErrResponse();
+        ListEnumerator              listEnumerator;
+        IMZListContract             imzListContract = new IMZListContract();
+        boolean                     ok = true, isModified;
+        WMSPickingTmp               pickingTmp;
+
+        try
+        {
+            listEnumerator  = _request.parmLines().getEnumerator();
+            while(listEnumerator.moveNext())
+            {
+                imzListContract = listEnumerator.current();
+
+                pickingTmp.TransRefId           = imzListContract.parmTransferId();
+                pickingTmp.PickingRouteID       = imzListContract.parmPickingRouteId();
+                pickingTmp.ItemId               = imzListContract.parmItemId();
+                pickingTmp.WMSLocationId        = imzListContract.parmLocationId();
+                pickingTmp.SortCode             = imzListContract.parmSortCode();
+                pickingTmp.OrderQty             = imzListContract.parmOrderQty();
+                pickingTmp.PickedQty            = imzListContract.parmPickedQty();
+                pickingTmp.CanceledQty          = imzListContract.parmCanceledQty();
+                pickingTmp.SysGuid              = imzListContract.parmWMSGuid();
+                pickingTmp.ItemBarCode          = imzListContract.parmBarCode();
+                pickingTmp.PrintPackingSlip     = imzListContract.parmPrintPackingSlip();
+                pickingTmp.WMSOrderTransRecId   = imzListContract.parmOrderTransRecId();
+                pickingTmp.insert();
+            }
+            response.parmSuccess(true);
+
+        }
+        catch (Exception::CLRError)
+        {
+            System.Exception interopException = CLRInterop::getLastException();
+
+            response.parmSuccess(false);
+            response.parmErrorMessage(interopException.ToString());
+        }
+        return response;
+    }
+
+in case of multiple class we use this:
+
+[DataContractAttribute]
+public class IMZHeaderContract
+{
+    List    lineList;
+
+    [DataMember('Lines'),
+    AifCollectionType('_lineList', Types::Class, classStr(IMZListContract)),
+    AifCollectionType('return', Types::Class, classStr(IMZListContract))]
+    public List parmLines(List _lineList = lineList)
+    {
+        lineList = _lineList;
+        return lineList;
+    }
+
+}
+
+
+
+Response:
+
+[DataContractAttribute]
+class IMZJsonResponse
+{
+    str         data; 
+    boolean     success;
+    str         errorMessage;
+
+    [DataMember("ErrorMessage")]
+    public str parmErrorMessage(str _value = errorMessage)
+    {
+        if (!prmIsDefault(_value))
+        {
+            errorMessage = _value;
+        }
+        return errorMessage;
+    }
+
+    [DataMember("Success")]
+    public Boolean parmSuccess(Boolean _value = success)
+    {
+        if (!prmIsDefault(_value))
+        {
+            success = _value;
+        }
+        return success;
+    }
+
+    [DataMember("Data")]
+    public str parmData(str _data = data)
+    {
+        data = _data;
+        return data;
+    }
+
+}
+
+
+For line contract
+Is simple contract class
+
+[DataContractAttribute]
+public class IMZListContract
+{
+    str                 pickRefNumber;
+    str                 transferId;
+    WMSPickingRouteID   pickingRouteId;
+    itemId              itemId;
+    WMSLocationId       locationId;
+    WMSSortCode         sortCode;
+    InventPickOrderQty  orderQty;
+    WHSPickedQty        pickedQty;
+    UnitQty             canceledQty;
+    SysGuid             wmsGuid;
+    ItemBarCode         barCode;
+    WHSPrintPackingSlip printPackingSlip;
+    RefRecId            orderTransRecId;
+
+
+    [DataMember("PickRefNumber")]
+    public str parmPickRefNumber(str _pickRefNumber = pickRefNumber)
+    {
+        pickRefNumber = _pickRefNumber;
+
+        return pickRefNumber;
+    }
+
+}
+
+After adding your logic add your service class to Service and then add that service to the service group
+
+steps for bearer token: 
+
+register your app, write web and add your d365 fo url
+grant api permission in api permission node
+goto overview copy tenant and client id for the following steps
+client for adding client in system administration>Azure Active Directory 
+
+tenant id for bearer token in postman
+https://login.microsoftonline.com/Your_Directory_(tenant)_ID/oauth2/token
+
+https://login.microsoftonline.com/c5cd1154-8516-43f6-bdfc-523ebdcc49cc/oauth2/token
+
+client id : 66380b83-a0aa-4b5a-9049-c3afce687ccd
+
+tenant id : c5cd1154-8516-43f6-bdfc-523ebdcc49cc
+
+steps for postman setup
+URL:
+https://login.microsoftonline.com/Your_Directory_(tenant)_ID/oauth2/token
+Now in body section click on form data and then add the following keys and their values
+grant_type : client_credentials
+client_id : your client id
+client_secret : your app client secret
+resource : your fo url
+
+
+general URL to hit API
+https://YourD365FOURL/api/services/YourServiceGroupName/YourServiceName/methodToExecute
+
+https://https://usnconeboxax1aos.cloud.onebox.dynamics.com/api/services/CustomerServiceGroup/CustomerService/createCustomer
+
+JSON format for on the above api is 
+{
+    "_request":
+    {
+    "Lines" :
+    [ 
+    {
+        "TransferId": "024188-SO",
+        "PickingRouteId": "242620_156",
+        "ItemId": "085-0003-L",
+        "LocationId": "Q07-A02",
+        "SortCode": 0
+    },
+    {
+        "TransferId": "024188-SO",
+        "PickingRouteId": "242620_156",
+        "ItemId": "085-0003-L",
+        "LocationId": "Q07-A02",
+        "SortCode": 0
+    }
+    ]
+    }
+}
