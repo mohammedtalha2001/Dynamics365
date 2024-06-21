@@ -1,0 +1,101 @@
+//This blog provides you a code for iterating over a Table and get its elements DataTypes name and if enum then There Values
+
+using System.IO;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
+using OfficeOpenXml.Table;
+
+internal final class Utz_CoreAPI_FieldMappingRunnable
+{
+    /// <summary>
+    /// Class entry point. The system will call this method when a designated menu 
+    /// is selected or when execution starts and this class is set as the startup class.
+    /// </summary>
+    /// <param name = "_args">The specified arguments.</param>
+    public static void main(Args _args)
+    {
+        MemoryStream memoryStream = new MemoryStream();
+
+        using (var package = new ExcelPackage(memoryStream))
+        {
+            var row = 1;
+
+            var worksheets = package.get_Workbook().get_Worksheets();
+            var worksheet = worksheets.Add("Export");
+            var cells = worksheet.get_Cells();
+
+            OfficeOpenXml.ExcelRange cell = cells.get_Item(row, 1);
+            System.String value = "Field name";
+            cell.set_Value(value);
+
+            cell = null;
+            value = "Field data type";
+            cell = cells.get_Item(row, 2);
+            cell.set_Value(value);
+
+            
+            cell = null;
+            value = "Enum data";
+            cell = cells.get_Item(row, 3);
+            cell.set_Value(value);
+
+            row = 2;
+
+            
+            DictTable   dt;
+            DictField   df;
+            
+            int         counter;
+            counter = 0;
+            dt = new DictTable(tablenum(Utz_CoreAPI_LoadTableStaging));
+            if (dt)
+            {
+                counter = dt.fieldNext(counter);
+                while (counter)
+                {
+                    df = dt.fieldObject(counter);
+                    
+                    if (df && !df.isSystem())
+                    {
+                        
+                        cell = null;
+                        value =  df.name();
+                        cell = cells.get_Item(row, 1);
+                        cell.set_Value(value);
+
+                        cell = null;
+                        value = strFmt('%1',df.baseType());
+                        cell = cells.get_Item(row, 2);
+                        cell.set_Value(value);
+
+                        if (df.baseType() == Types::Enum)
+                        {
+                            str enumInfo = '';
+                            DictEnum de;
+                            int      i;
+                            de = new DictEnum(df.enumId());
+                            enumInfo =  strFmt('%1', de.name());
+                            for (i=0; i < de.values(); i++)
+                            {
+                                enumInfo += '\n' + int2str(i) + " - " + de.index2Name(i);
+                            }
+                            cell = null;
+                            value = strFmt('%1',enumInfo);
+                            cell = cells.get_Item(row, 3);
+                            cell.set_Value(value);
+                        }
+                    }
+                    counter = dt.fieldNext(counter);
+                    row++;
+                }
+            }
+
+
+            package.Save();
+            file::SendFileToUser(memoryStream, 'loadDetHeaderfieldDataTypeInfo.xlsx');
+        }
+
+    }
+
+}
+
