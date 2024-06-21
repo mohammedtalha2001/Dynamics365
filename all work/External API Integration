@@ -1,0 +1,324 @@
+In this blog we will discuss how to integrate External APIs and how to get accessToken for these APIs as these are authrntication based APIs
+
+class DMESinglePaymentAPICalling
+{
+
+//In this method i am getting Access token and then calling other two apis based on conditions
+    public static container getResponse(LedgerJournalTable _ledgerJournalTable)
+    {
+        container resAsCon;
+        str authorization_Detail;
+
+        authorization_Detail = DMESinglePaymentAPICalling::getAccessToken(DMESinglePaymentAPICalling::accessTokenAPICall());
+        //info(authorization_Detail);
+
+        if(_ledgerJournalTable.DMEPaymentId)
+        {
+            resAsCon = DMESinglePaymentAPICalling::getAPIStatusJsonRead(DMESinglePaymentAPICalling::getAPIStatus(authorization_Detail,
+                        _ledgerJournalTable.DMEPaymentId));
+        }
+        else
+        {
+            resAsCon = DMESinglePaymentAPICalling::singlePayAPIJsonRead(DMESinglePaymentAPICalling::singlePayAPI(authorization_Detail));
+        }
+
+        return resAsCon;
+    }
+
+    public static str singlePayAPI(str _authorization)
+    {
+        str                             apiURL;
+        str                             requestJson,responseJson;
+        System.Net.HttpWebRequest       request;
+        System.Net.HttpWebResponse      response = new System.Net.HttpWebResponse();
+        CLRObject                       clrObject;
+        System.Byte[]                   bytes;
+        System.Text.Encoding            utf8;
+        System.IO.Stream                requestStream,responseStream;
+        System.IO.StreamReader          streamReader;
+        System.Net.WebHeaderCollection  httpHeader;
+        System.Net.ServicePoint         servicePt;
+        str                             byteStr;
+        System.Byte[]                   byteArray;
+        System.IO.Stream                stream;
+        System.IO.Stream                dataStream;
+        str                             returnValue;
+        System.String                   jsonResponse;
+        Newtonsoft.Json.Linq.JObject    jobject;
+      
+        apiURL = 'https://sandbox.anb.com.sa/v1/payment/json';
+        requestJson = @'{
+                "sequenceNumber": "{{sequence}}",
+                "valueDate": "210414",
+                "currency": "SAR",
+                "amount": "{{random_number}}",
+                "orderingParty": "SWAGGER",
+                "feeIncluded": false,
+                "orderingPartyAddress1": "An Nafel",
+                "orderingPartyAddress2": "Riyadh",
+                "orderingPartyAddress3": "Saudi Arabia",
+                "debitAccount": "0108057386290014",
+                "destinationBankBIC": "ARNBSARI",
+                "channel": "ANB",
+                "creditAccount": "0108061198800019",
+                "beneficiaryName": "Saud",
+                "beneficiaryAddress1": "KSA",
+                "beneficiaryAddress2": "Riyadh",
+                "narrative": "ANB To ANB Transfer",
+                "transactionComment": "ANB to ANB works",
+                "purposeOfTransfer": "38"
+            }';
+
+        httpHeader = new System.Net.WebHeaderCollection();
+        httpHeader.Add('Authorization', strFmt(" Bearer %1", _authorization));
+        httpHeader.Add("name","application/json");
+        System.Net.ServicePointManager::set_Expect100Continue(false);
+        clrObject = System.Net.WebRequest::Create(apiURL);
+        request = clrObject;
+        request.set_Method("POST");
+        request.set_KeepAlive(true);
+        request.set_Headers(httpHeader);
+        utf8 = System.Text.Encoding::get_UTF8();
+        bytes = utf8.GetBytes(requestJson);
+        request.set_ContentType("application/json");
+        request.set_ContentLength(bytes.get_Length());
+
+        requestStream = request.GetRequestStream();
+        requestStream.Write(bytes, 0, bytes.get_Length());
+        response           = request.GetResponse();
+        stream             = response.GetResponseStream();
+        streamReader       = new System.IO.StreamReader(stream);
+
+        jsonResponse       = streamReader.ReadToEnd().ToString();
+
+        return jsonResponse;
+
+    }
+
+    /// <summary>
+    /// Get initial status
+    /// singlePayAPI response reader and then return the Valueable data in Container
+    /// <param name = "Json"></param>
+    public static container  singlePayAPIJsonRead(System.String   Json)
+    {
+        List                paramAsList;
+        ListEnumerator      le;
+        str                 jsonbreak,jsonRep, id, status;
+        container           paramAsCon, resAsCon;
+        System.Exception    ex;
+        int                 i;
+        boolean             Success;
+        ;
+
+        try
+        {
+            paramAsList = strSplit(Json, ",");
+
+            le = paramAsList.getEnumerator();
+
+            while(le.moveNext())
+            {
+                jsonRep = strReplace(strReplace(strReplace(strReplace(strReplace(le.current(),'"',''),'{',''),'}',''),']',''),'[','');
+
+                paramAsCon += str2con(jsonRep,":");
+            }
+
+            id = conPeek(paramAsCon, 2);
+            id =  strRem(id," ");
+            status = conPeek(paramAsCon, 8);
+            status =  strRem(status,"\n");
+            status = strRem(status," ");
+
+            resAsCon = [id, status];
+        }
+
+        catch (Exception::CLRError)
+        {
+            ex = ClrInterop::getLastException();
+            
+            if (ex != null)
+            {
+                ex = ex.get_InnerException();
+
+                if (ex != null)
+                {
+                    error(ex.ToString());
+                }
+            }
+        }
+        return resAsCon;
+    }
+
+  //Calls the Access token API to get the token in response
+  //You can pass you creds in header but as per my api it requires a body with that cred so i do this
+    public static str accessTokenAPICall()
+    {
+       
+        System.String           jsonResponse;
+        System.Net.WebRequest   webreq = System.Net.WebRequest::Create("https://sandbox.anb.com.sa/v1/b2b-auth/oauth/accesstoken");
+        System.IO.Stream        streamstr,responsestr;
+        System.IO.StreamWriter  streamWriter;
+        System.Net.WebResponse  webresponse;
+        System.IO.StreamReader  reader;
+        str                     reqBody;
+
+        reqBody = "grant_type=client_credentials&client_id=LSlNlt4dZiUC9vDjep0uPLMyJUUuZOo7&client_secret=fLHamLyYgUgQ71Rx";
+        webreq.set_Method("POST");
+        webreq.set_ContentType('application/x-www-form-urlencoded');
+        streamstr = webreq.GetRequestStream();
+        streamWriter = new System.IO.StreamWriter(streamstr);
+        streamWriter.Write(reqBody);
+        streamWriter.Flush();
+        streamWriter.Close();
+        streamWriter.Dispose();
+        webresponse = webreq.GetResponse();
+        responsestr = webresponse.GetResponseStream();
+        reader = new System.IO.StreamReader(responsestr);
+
+        jsonResponse       = reader.ReadToEnd().ToString();
+
+        return jsonResponse;
+    }
+
+  //Access token API response reader
+    public static  str getAccessToken(System.String   Json)
+    {
+        List                paramAsList;
+        ListEnumerator      le;
+        str                 jsonbreak,jsonRep, tokenType, accessToken;
+        container           paramAsCon;
+        System.Exception    ex;
+        int                 i;
+        boolean             Success;
+        ;
+
+        try
+        {
+            paramAsList = strSplit(Json, ",");
+            le = paramAsList.getEnumerator();
+
+            while(le.moveNext())
+            {
+                jsonRep = strReplace(strReplace(strReplace(strReplace(strReplace(le.current(),'"',''),'{',''),'}',''),']',''),'[','');
+
+                paramAsCon += str2con(jsonRep,":");
+               
+            }
+            accessToken =  conPeek(paramAsCon, 4);
+            accessToken = strRem(accessToken," ");
+        }
+
+        catch (Exception::CLRError)
+        {
+            ex = ClrInterop::getLastException();
+            
+            if (ex != null)
+            {
+                ex = ex.get_InnerException();
+
+                if (ex != null)
+                {
+                    error(ex.ToString());
+                }
+            }
+        }
+        return accessToken;
+
+    }
+
+    public static str getAPIStatus(str _authorization, str _id)
+    {
+        System.IO.StringWriter          stringWriter;
+        Newtonsoft.Json.JsonTextWriter  jsonWriter;
+        System.Net.HttpWebRequest       request;
+        System.Net.HttpWebResponse      response;
+        System.IO.StreamWriter          streamWrite;
+        System.Net.ServicePoint         servicePoint;
+        CLRObject                   	  clrObj;
+        System.Text.Encoding            utf8;
+        System.Exception                ex;
+        System.Byte[]                   byteArraynew;
+        System.Net.WebHeaderCollection  headers = new System.Net.WebHeaderCollection();
+        str                         	  msgStatusCode;
+        str                         	  jsonmsg ,url;
+ 
+       
+        new InteropPermission(InteropKind::ClrInterop).assert();
+        str  byteStr = strfmt('%1:%2', "USERNAME", "PASSWORD");
+        url = strFmt("https://sandbox.anb.com.sa/v1/payment/%1",_id);
+        clrObj = System.Net.WebRequest::Create(url);
+        request  = clrObj;
+        request.set_Method("GET");
+        request.set_KeepAlive(true);
+        utf8  = System.Text.Encoding::get_UTF8();
+        byteArraynew  = utf8.GetBytes(byteStr);
+        byteStr = System.Convert::ToBase64String(byteArraynew);
+        headers.Add('Authorization', strFmt(" Bearer %1",_authorization));
+        request.set_Headers(headers);
+        request.set_Accept("application/json");
+        request.set_ContentType("application/json");
+        servicePoint = request.get_ServicePoint();
+        servicePoint.set_Expect100Continue(false);
+            
+            
+        stringWriter = new System.IO.StringWriter();
+        jsonWriter = new Newtonsoft.Json.JsonTextWriter(stringWriter);
+        response = request.GetResponse();
+        System.IO.StreamReader streamRead = new System.IO.StreamReader(response.GetResponseStream());
+        jsonmsg = streamRead.ReadToEnd().ToString();
+
+        return jsonmsg;
+
+    }
+
+    /// <summary>
+    /// Gets the current status of payment.
+    /// <param name = "Json"></param>
+    public static container  getAPIStatusJsonRead(System.String Json)
+    {
+        List                paramAsList;
+        ListEnumerator      le;
+        str                 jsonbreak,jsonRep, finalStatus, id;
+        container           paramAsCon, resAsCon;
+        System.Exception    ex;
+        int                 i;
+        boolean             Success;
+        ;
+
+        try
+        {
+            paramAsList = strSplit(Json, ",");
+            le = paramAsList.getEnumerator();
+
+            while(le.moveNext())
+            {
+                jsonRep = strReplace(strReplace(strReplace(strReplace(strReplace(le.current(),'"',''),'{',''),'}',''),']',''),'[','');
+                paramAsCon += str2con(jsonRep,":");
+            }
+
+            id = conPeek(paramAsCon, 2);
+            finalStatus = conPeek(paramAsCon, 10);
+            finalStatus = strRem(finalStatus, " ");
+
+            resAsCon = [id, finalStatus];
+            //info(strFmt("Final Status = %1",conPeek(paramAsCon, 10)));
+        }
+
+        catch (Exception::CLRError)
+        {
+            ex = ClrInterop::getLastException();
+            
+            if (ex != null)
+            {
+                ex = ex.get_InnerException();
+
+                if (ex != null)
+                {
+                    error(ex.ToString());
+                }
+            }
+        }
+        return resAsCon;
+    }
+
+}
