@@ -86,3 +86,9 @@ public void lookup(FormControl _formControl, str _filterStr)
 
 If you want to show drop down that shows all the Attribute Names in it then you have to bind the below relation with your field
 PurchParameter.ATI_DimensionAttrName == DimensionAttribute.Name
+
+To get the OffSetLedgerDimension of a certain bankAccount use this code
+select firstonly bankAccountTable 
+    where bankAccountTable.Name == 'Arab National Bank';
+
+offSetLedgerDimension = LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(bankAccountTable.AccountID, LedgerJournalACType::Bank);
