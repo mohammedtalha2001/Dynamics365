@@ -68,23 +68,16 @@ class MT_POContractClass
 now the parameters value means the recid should be the recid of current selected record so that the report of that recid would print 
 so to do that set the value of recid in the controller class the controller class code would be
 
-class MT_POController extends ProjectReportsController
+class BSCQoutationReportController extends ProjectReportsController
 {
-     
     public static void main(Args args)
     {
-        PurchTable PurchTable;
-        RecId _recId;
-        MT_POContractClass MT_POContractClass;
-        MT_POController controller = new MT_POController();
-        MT_POContractClass Contract = new MT_POContractClass();
+        BSCQoutationReportController    controller = new BSCQoutationReportController();
 
-        // Set the Current Rec Id to Contract Class Object
-        purchTable = args.record() as PurchTable;
-        Contract.recId(purchTable.RecId);
         //set the report name and report design to run
-        controller.parmReportName(ssrsReportStr(MT_POReport,Design));
-        controller.parmReportContract().parmRdpContract(Contract);
+        controller.parmReportName(ssrsReportStr(BSCQoutationReport, Report));
+
+        controller.parmArgs(args);
         
         // Prevent the report dialog to show
         controller.parmShowDialog(false);
@@ -92,7 +85,17 @@ class MT_POController extends ProjectReportsController
         //execute the report
         controller.startOperation();
     }
+    
+    protected void preRunModifyContract()
+    {
+        SalesQuotationTable             salesQuotationTable;
+        BSCQoutationReportContract      contract;
 
+        salesQuotationTable = this.parmArgs().record() as SalesQuotationTable;
+        contract = this.parmReportContract().parmRdpContract();
+
+        contract.recId(salesQuotationTable.RecId);
+    }
 }
 
 
