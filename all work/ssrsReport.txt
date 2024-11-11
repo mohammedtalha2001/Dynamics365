@@ -68,7 +68,7 @@ class MT_POContractClass
 now the parameters value means the recid should be the recid of current selected record so that the report of that recid would print 
 so to do that set the value of recid in the controller class the controller class code would be
 
-class BSCQoutationReportController extends ProjectReportsController
+class BSCQoutationReportController extends SRSReportRunController
 {
     public static void main(Args args)
     {
