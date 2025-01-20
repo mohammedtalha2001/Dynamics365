@@ -1,0 +1,701 @@
+using System.IO;
+using OfficeOpenXml;
+using OfficeOpenXml.ExcelPackage;
+using OfficeOpenXml.ExcelRange;
+
+// This is a framework class. Customizing this class may cause problems with future upgrades to the software.
+class DMEKanooIntegrationRunBaseBatch extends RunBaseBatch implements BatchRetryable
+{
+
+    Filename                            ItemFileName;
+    Filename                            filename;
+    DialogField                         dialogFilename;
+    DialogRunbase                       dialog;
+ 
+    System.IO.Stream                    stream;
+    FileUploadTemporaryStorageResult    fileUploadResult;
+    OfficeOpenXml.ExcelRange            range;
+    CommaTextStreamIo                   commaIo;
+    RecordInsertList                    rsl;
+    boolean                             newIteration;
+    int                                 line,
+                                        lineimported,lineerror, lineskipped;
+    Counter                             loop;
+    FileUploadBuild                     dialogFileUpload;
+    FileUpload                          fileUpload;
+    // Packed variables
+    VendAccount                         vendorId;
+    LedgerJournalNameId                 JrlId;
+    LedgerJournalId                     journalId;
+
+
+    // Dialog fields
+    DialogField                         dlgVendorId;
+    DialogField                         dlgJrlId;
+    container                           invContainer;
+
+
+    #define.initFromJournal('VINV')
+    #define.AEDCurrency('SAR')
+    #define.EmptyCurrency('')
+    #define.CurrentVersion(1)
+    #localmacro.CurrentList
+        vendorId,
+        JrlId
+    #endmacro
+  
+   
+
+    public boolean canGoBatchJournal()
+    {
+        return true;
+    }
+
+    public Object dialog()
+    {
+        FormBuildStringControl   control;
+        dialog = super();
+        #resAppl
+        ;
+
+        dlgVendorId = dialog.addFieldValue(extendedTypeStr(VendAccount),vendorId);
+
+        dlgJrlId = dialog.addField(extendedTypeStr(LedgerJournalNameId));
+        control = dlgJrlId.control();
+        control.registerOverrideMethod(methodStr(FormStringControl,lookup),
+        methodStr(DMEKanooIntegrationRunBaseBatch,jrlIdLookup),this);
+
+        DialogGroup dialogGroup = dialog.addGroup('Upload file');
+ 
+        FormBuildControl formBuildControl = dialog.formBuildDesign().control(dialogGroup.name());
+        dialogFileUpload = formBuildControl.addControlEx(classstr(FileUpload), 'FileUpload');
+        dialogFileUpload.style(FileUploadStyle::MinimalWithFilename);
+        dialogFileUpload.fileNameLabel("@SYS308842");
+        dialogFileUpload.fileTypesAccepted(".xlsx");
+
+        return dialog;
+    }
+
+    public void dialogPostRun(DialogRunbase _dialog)
+    {
+        ;
+        super(dialog);
+
+        fileUpload = _dialog.formRun().control(_dialog.formRun().controlId('FileUpload'));
+        fileUpload.notifyUploadCompleted += eventhandler(this.uploadCompleted);
+        this.setDialogOkButtonEnabled(_dialog, false);
+    }
+
+    public boolean getFromDialog()
+    {
+        ;
+        vendorId   = dlgVendorId.value();
+        JrlId = dlgJrlId.value();
+
+        return super();
+    }
+
+    public boolean init()
+    {
+        return true;
+    }
+
+    protected void new()
+    {
+        super();
+    }
+
+    public container pack()
+    {
+        return [#CurrentVersion,#CurrentList];
+    }
+
+    /// <summary>
+    ///    Contains the code that does the actual job of the class.
+    /// </summary>
+    public void run()
+    {
+        boolean isValid;
+        #OCCRetryCount
+        if (! this.validate())
+            throw error("");
+
+        try
+        {
+            ttsbegin;
+
+            isValid = this.importInvValidation();
+
+            if(isValid)
+            {
+                this.import();
+            }
+            else
+            {
+                Error("Please remove duplicate invoices from excel");
+            }
+
+            ttscommit;
+        }
+        catch (Exception::Deadlock)
+        {
+            retry;
+        }
+        catch (Exception::UpdateConflict)
+        {
+            if (appl.ttsLevel() == 0)
+            {
+                if (xSession::currentRetryCount() >= #RetryNum)
+                {
+                    throw Exception::UpdateConflictNotRecovered;
+                }
+                else
+                {
+                    retry;
+                }
+            }
+            else
+            {
+                throw Exception::UpdateConflict;
+            }
+        }
+    }
+
+    public boolean runsImpersonated()
+    {
+        return true;
+    }
+
+    public boolean unpack(container packedClass)
+    {
+        Version version = RunBase::getVersion(packedClass);
+        ;
+        switch (version)
+        {
+            case #CurrentVersion:
+                [version,#CurrentList] = packedClass;
+                break;
+            default:
+                return false;
+        }
+
+        return true;
+    }
+
+    public boolean validate(Object _calledFrom = null)
+    {
+        if (false)
+            return checkFailed("");
+
+        return true;
+    }
+
+    static DMEKanooIntegrationRunBaseBatch construct()
+    {
+        return new DMEKanooIntegrationRunBaseBatch();
+    }
+
+    // Here goes a description of the class
+    static ClassDescription description()
+    {
+        return "Import Kanoo Invoices";
+    }
+
+    static void main(Args args)
+    {
+        DMEKanooIntegrationRunBaseBatch    runBase;
+        ;
+        runBase = DMEKanooIntegrationRunBaseBatch::construct();
+
+        if (runBase.prompt())
+            runBase.runOperation();
+    }
+
+    [Hookable(false)]
+    public final boolean isRetryable()
+    {
+        return true;
+    }
+
+    protected boolean canRunInNewSession()
+    {
+        return false;
+    }
+
+    Private void jrlIdLookup(FormStringControl _control)
+    {
+        SysTableLookup          sysTableLookup;
+        QueryBuildDataSource    qbds;
+        
+        Query query = new Query();
+        qbds = Query.addDataSource(tableNum(LedgerJournalTable));
+        qbds.addRange(fieldNum(LedgerJournalTable, JournalType)).value(SysQuery::value(LedgerJournalType::VendInvoiceRegister));
+        qbds.addGroupByField(fieldNum(LedgerJournalTable, JournalName));
+        sysTableLookup = SysTableLookup::newParameters(tableNum(LedgerJournalTable), _control,true);
+        //sysTableLookup.addLookupfield(fieldNum(LedgerJournalTable,JournalNum), true);
+        sysTableLookup.addLookupfield(fieldNum(LedgerJournalTable, JournalName), true);
+        sysTableLookup.parmQuery(query);
+        sysTableLookup.performFormLookup();
+    }
+
+    void create(int row, int iterations)
+    {
+        str                 itemId;
+        Str                 inventPrice;
+
+        str                 invoice, combinedInvoice;
+        Date                invoiceDate;
+        real                netAmount;
+        str                 employeeId;
+        str                 tripReason;
+        str                 description;
+        str                 passengerName, invoiceSeries, creditNoteSeries;
+        str                 ticket;
+        date                flightDate;
+        str                 invoiceDateStr, flightDateStr;
+
+        int                                     i;
+        str                                     invdate , invfinaldate;
+        date                                    dateheader , dateheaderval , dateline;
+        System.DateTime                         netDttm;
+        real                                    amountcr;
+        utcdatetime                             xppDttm , invdatetime;
+        LedgerJournalTable                      journalTable;
+        JournalTableData                        journalTableData;
+        LedgerJournalTrans                      journalTrans;
+        container                               offsetCon, offsetConLoc , mainAccountCon, offsetConAr;
+        NumberSeq                               numberSeq;
+        Voucher                                 voucher;
+        LedgerJournalName                       ledgerJournalName;
+        AccountNum                              vendAccount;
+        HcmWorker                               hcmWorker;
+        DirPerson                               dirPerson;
+        DirPersonUser                           dirPersonUser;
+        MainAccount                             mainAccount;
+        Voucher                                 vch;
+        DimensionAttributeValueCombination      dimCombination1;
+        String255                               tmpOffsetAccount, tmpVoucherNo;
+        DimensionAttributeValueCombination      dimCombination, dimCombinationLoc;
+        NoYes                                   newOffsetLine = NoYes::Yes;
+        String10                                purchId;
+        LedgerJournalCheckPost                  jourCheckPost;
+
+        LedgerDimensionDefaultAccount           OffSetledgerDimension;
+        DimensionDynamicAccount                 accountLedgerDim;
+        MainAccountNum                          accountMainId;
+        VendParameters                          vendParameter;
+        utcdatetime                             baseDate, invBaseDate,flightBasedate;
+        str                                     CostCenter, Department, Project, worker;
+        LegalEntity                             LegalEntity;
+        str                                     AdvancedRule;
+        int                                     advanceRuleCheck;
+        container                               currentRules;
+        DimensionHierarchy                      dimensionHierarchy;
+        DimensionDynamicAccount                 offsetAccountLedgerDim;
+        i=0;
+        baseDate =  utcdatetimenull();
+        
+        InventTableModule           inventTableModule;
+        DMETripReasonTable          tripReasonTable;
+ 
+        invoiceSeries       = range.get_Item(row, 1).Value;
+        creditNoteSeries    = range.get_Item(row, 2).Value;
+        invoice             = range.get_Item(row, 3).Value;
+        passengerName       = range.get_Item(row, 4).Value;
+        ticket              = range.get_Item(row, 5).Value;
+        flightDateStr       = any2Str(range.get_Item(row, 10).Value);
+        flightDate          = DateTimeUtil::date(DateTimeUtil::addDays(baseDate, str2Int(flightDateStr) - 2));
+        netAmount           = range.get_Item(row, 19).Value;
+        invoiceDateStr      = any2Str(range.get_Item(row, 26).Value);
+        invoiceDate         = DateTimeUtil::date(DateTimeUtil::addDays(baseDate, str2Int(invoiceDateStr) - 2));
+        employeeId          = range.get_Item(row, 28).value;
+        tripReason          = range.get_Item(row, 29).Value;
+        description         = strFmt("%1 - %2 - %3 - %4 - %5",passengerName,invoice,ticket,invoiceDate,flightDate);
+
+        try
+        {
+            ttsbegin;
+
+            select firstonly tripReasonTable
+                    where tripReasonTable.TripReason == tripReason;
+
+            if(!tripReasonTable.RecId)
+            {
+                throw Error(strFmt("Main account doesn't exist against Trip reason: %1 in row %2",tripReason,row));
+            }
+
+            select hcmWorker where hcmWorker.PersonnelNumber == employeeId;
+
+            if(!hcmWorker.RecId)
+            {
+                throw Error(strFmt("No worker exist against Employee id: %1 in row %2",employeeId,row));
+            }
+
+           
+            if(row == 2)
+            {
+                ledgerJournalName            =   LedgerJournalName::find(JrlId);
+                journalTable.initFromLedgerJournalName(JrlId);
+                journalTableData            =   JournalTableData::newTable(journalTable);
+                journalTable.JournalNum     =   journalTableData.nextJournalId();
+                journalTable.CurrencyCode   =   #AEDCurrency;
+
+                journalId = journalTable.JournalNum;
+
+                if (journalTable.validateWrite())
+                {
+                    journalTable.insert();
+                    Info(strFmt("Created Vendor invoice journal | %1 : %2 ",journalTable.JournalNum, JrlId));
+                }
+            }
+
+            select journalTable 
+                where journalTable.JournalNum == journalId;
+
+            accountLedgerDim = LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(vendorId,LedgerJournalACType::Vend);
+            accountMainId = LedgerDimensionFacade::getMainAccountFromLedgerDimension(accountLedgerDim).MainAccountId;
+
+            //OffsetAccount
+            OffSetledgerDimension = LedgerDefaultAccountHelper::getDefaultAccountFromMainAccountId(tripReasonTable.DMEMainAccountId);
+
+            select firstonly vendParameter;
+
+            if(netAmount < 0)
+            {
+                //credit note case
+                combinedInvoice = creditNoteSeries + invoice;
+            }
+            else
+            {
+                combinedInvoice = invoiceSeries + invoice;
+            }
+            amountcr= 0.00;
+           
+           
+            
+            CostCenter  = DMEKanooIntegrationRunBaseBatch::employeeDim(HcmWorker,'CostCenter');
+            Department  = DMEKanooIntegrationRunBaseBatch::employeeDim(HcmWorker,'Department');
+            Project     = DMEKanooIntegrationRunBaseBatch::employeeDim(HcmWorker,'Project');
+            worker      = DMEKanooIntegrationRunBaseBatch::employeeDim(HcmWorker,'Worker');
+
+            offsetConLoc =   [tripReasonTable.DMEMainAccountId,CostCenter,Department,Project,worker,"","",""];
+            offsetConAr = [CostCenter,Department,Project,worker,"","",""];
+
+            LegalEntity = CompanyInfo::current();
+            mainAccount     = MainAccount::findByMainAccountId(tripReasonTable.DMEMainAccountId);
+            currentRules = MainAccount::getAdvancedRules(mainAccount.RecId, Ledger::primaryLedger(LegalEntity));
+            AdvancedRule = conPeek(conPeek(conPeek(conPeek(currentRules,1),2),2),1);
+
+
+            if(AdvancedRule)
+            {
+                advanceRuleCheck = strScan(AdvancedRule,"WORKER", 1, strLen(AdvancedRule));
+                if(advanceRuleCheck > 0)
+                {
+                    select dimensionHierarchy 
+                        where dimensionHierarchy.Name == AdvancedRule;
+                    offsetAccountLedgerDim =  this.generateLedgerDimension(offsetConAr, tripReasonTable.DMEMainAccountId,dimensionHierarchy.RecId);
+                }
+                else
+                {
+                    offsetAccountLedgerDim =  this.generateLedgerDimension(offsetConLoc, tripReasonTable.DMEMainAccountId,0);
+                }
+            }
+            else
+            {
+                offsetAccountLedgerDim =  this.generateLedgerDimension(offsetConLoc, tripReasonTable.DMEMainAccountId,0);
+            }
+            
+
+            numberSeq    =   NumberSeq::newGetVoucherFromId(journalTable.NumberSequenceTable, true);
+
+            journalTrans.JournalNum             =   journalTable.JournalNum;
+            journalTrans.Voucher                =   numberSeq.voucher();
+            journalTrans.Invoice                =   combinedInvoice;
+            journalTrans.DocumentDate           =   invoiceDate;
+            journalTrans.Txt                    =   description;
+            
+            journalTrans.TransDate              =   invoiceDate;//str2Date(journalDeatils.TransactionDate, 123);
+            journalTrans.AccountType            =   LedgerJournalACType::Vend;
+            //journalTrans.LedgerDimension      =   this.generateLedgerDimension(offsetCon, accountMainId);
+            journalTrans.LedgerDimension        =   accountLedgerDim;
+
+            if(netAmount < 0)
+            {
+                journalTrans.AmountCurDebit         =   netAmount * -1;
+            }
+            else
+            {
+                journalTrans.AmountCurCredit        =   netAmount;
+            }
+
+            journalTrans.OffsetAccountType      =   LedgerJournalACType::Ledger;
+            journalTrans.OffsetLedgerDimension  =  offsetAccountLedgerDim;
+            //journalTrans.OffsetLedgerDimension  =   OffSetledgerDimension;
+               
+            journalTrans.CurrencyCode           = #AEDCurrency;
+            journalTrans.ExchRate               =  ExchangeRateHelper::exchRate(journalTrans.CurrencyCode, journalTrans.TransDate);
+            journalTrans.Approver               = hcmWorker.RecId;
+            journalTrans.Approved               = NoYes::Yes;
+            journalTrans.PostingProfile         = vendParameter.PostingProfile;
+            journalTrans.TransactionType        = LedgerTransType::Vend;
+            //journalTrans.Payment              = vendInvoiceJourStageLine.PaymentTerms;
+            journalTrans.insert();
+            
+            Info(strFmt("Voucher = %1 created against Jbn = %2",journalTrans.Voucher,journalTable.JournalNum));
+
+            //if(row == iterations)
+            //{
+            //    if (journalTable.RecId)
+            //    {
+            //        jourCheckPost = ledgerJournalCheckPost::newLedgerJournalTable(journalTable,
+            //                                                    NoYes::Yes,
+            //                                                    NoYes::Yes);
+            //        // Post only if there is succesful validation.
+            //        if (jourCheckPost.validate())
+            //        {
+            //            jourCheckPost.run();
+            //            Info(strFmt("Journal | %1 Successfully posted.",journalTable.JournalNum));
+            //        }
+            //    }
+            //}
+
+            numberSeq.used();
+
+            lineimported ++;
+            ttscommit;
+        }
+        catch(Exception::Error)
+        {
+            throw Exception::Error;
+            lineerror ++;
+            ttsAbort;
+        }
+    }
+
+    void import()
+    {
+        Container               con;
+        InventTable             inventTable;
+         
+        ;
+        setPrefix("Kanoo imports");
+         
+        if (this.openFile())
+        {
+            using (ExcelPackage Package = new ExcelPackage(stream))
+            {
+                int                         rowCount, i, endRow, startRow, iterations;
+                Package.Load(stream);
+                ExcelWorksheet  worksheet   = package.get_Workbook().get_Worksheets().get_Item(1);
+                range       = worksheet.Cells;
+                endRow      = worksheet.Dimension.End.Row;
+                startRow    = worksheet.Dimension.Start.Row;
+                rowCount    = endRow - startRow + 1;
+                iterations  = rowCount - 1;
+
+                try
+                {
+                    for (i = 2; i<= iterations; i++)
+                    {
+                        //setPrefix(strFmt("Line %1", i));
+                        this.create(i, iterations);
+                    }
+                    //Info(strFmt("%1 - %2",vendorId,JrlId));
+                }
+                catch
+                {
+                    throw error("Error - Import template");
+                }
+            }
+        }
+ 
+        info(strfmt("%1 record(s) imported", lineimported));
+        info(strfmt("%1 record(s) fail", lineerror));
+    }
+
+    boolean validateInv(int row, int iterations)
+    {
+        str                 invoice;
+       
+        invoice = range.get_Item(row, 3).Value;
+       
+        if (conFind(invContainer, invoice))
+        {
+            // If the invoice number already exists, throw an error
+            return checkFailed("Duplicate invoices found");
+        }
+        else
+        {
+            // If the invoice number doesn't exist, add it to the container
+            invContainer += invoice;
+
+        }
+            
+        return true;
+    }
+
+    boolean importInvValidation()
+    {
+        Container               con;
+        InventTable             inventTable;
+        boolean                ret;
+        ;
+         
+        if (this.openFile())
+        {
+            using (ExcelPackage Package = new ExcelPackage(stream))
+            {
+                int                         rowCount, i, endRow, startRow, iterations;
+                Package.Load(stream);
+                ExcelWorksheet  worksheet   = package.get_Workbook().get_Worksheets().get_Item(1);
+                range       = worksheet.Cells;
+                endRow      = worksheet.Dimension.End.Row;
+                startRow    = worksheet.Dimension.Start.Row;
+                rowCount    = endRow - startRow + 1;
+                iterations  = rowCount - 1;
+
+                for (i = 2; i<= iterations; i++)
+                {
+                    //setPrefix(strFmt("Line %1", i));
+                  ret =   this.validateInv(i, iterations);
+                    if(ret == false)
+                    {
+                        return false;
+                    }
+                }
+                //Info(strFmt("%1 - %2",vendorId,JrlId));
+               
+            }
+        }
+        return ret;
+    }
+
+    boolean openFile()
+    {
+        boolean ret = false;
+ 
+        if (fileUploadResult != null && fileUploadResult.getUploadStatus())
+        {
+            stream = fileUploadResult.openResult();
+            ret = true;
+        }
+        else
+        {
+            throw error(strfmt("@SYS62207",filename));
+        }
+ 
+        return ret;
+    }
+
+    public void uploadCompleted()
+    {
+        filename = fileUpload.fileName();
+        this.setDialogOkButtonEnabled(dialog, true);
+        fileUploadResult = fileUpload.getFileUploadResult();
+        fileUpload.notifyUploadCompleted -= eventhandler(this.UploadCompleted);
+    }
+
+    protected void setDialogOkButtonEnabled(DialogRunbase _dialog, boolean _isEnabled)
+    {
+        FormControl okButtonControl = _dialog.formRun().control(_dialog.formRun().controlId('OkButton'));
+ 
+        if (okButtonControl)
+        {
+            okButtonControl.enabled(_isEnabled);
+        }
+    }
+
+    public DimensionDynamicAccount   generateLedgerDimension(container _conData,MainAccountNum  _mainAccountNum, RefRecId _recordValue)
+    {
+        int                                 hierarchyCount;
+        int                                 hierarchyIdx;
+        RecId                               dimAttId_MainAccount;
+        LedgerRecId                         ledgerRecId;
+        MainAccount                         mainAccount;
+        RefRecId                            recordvalue;
+        DimensionAttribute                  dimensionAttribute;
+        DimensionAttributeValue             dimensionAttributeValue;
+        DimensionSetSegmentName             DimensionSet;
+        DimensionStorage                    dimStorage;
+        LedgerAccountContract               LedgerAccountContract = new LedgerAccountContract();
+        DimensionAttributeValueContract     ValueContract;
+
+        List                                valueContracts = new List(Types::Class);
+       
+        dimensionAttributeValueCombination  dimensionAttributeValueCombination;
+     
+
+        mainAccount     = MainAccount::findByMainAccountId(_mainAccountNum);
+
+        if(_recordValue == 0)
+        {
+            recordvalue     = DimensionHierarchy::getAccountStructure(mainAccount.RecId,Ledger::current());
+        }
+        else
+        {
+            recordvalue = _recordValue;
+        }
+
+        hierarchyCount  = DimensionHierarchy::getLevelCount(recordvalue);
+        DimensionSet    = DimensionHierarchyLevel::getDimensionHierarchyLevelNames(recordvalue);
+        
+        for(hierarchyIdx = 1;hierarchyIdx<=hierarchyCount;hierarchyIdx++)
+        {
+            if(hierarchyIdx == 1 && _recordValue == 0)
+            {
+                continue;
+            }
+            dimensionAttribute =  DimensionAttribute::findByLocalizedName(DimensionSet[hierarchyIdx],false,"en-us");
+
+            if(dimensionAttribute)
+            {
+                dimensionAttributeValue =   DimensionAttributeValue::findByDimensionAttributeAndValue(dimensionAttribute,conPeek(_conData,hierarchyIdx));
+
+                if(dimensionAttributeValue)
+                {
+                    ValueContract = new DimensionAttributeValueContract();
+                    ValueContract.parmName(dimensionAttribute.Name);
+                    ValueContract.parmValue(dimensionAttributeValue.CachedDisplayValue);
+                    valueContracts.addEnd(ValueContract);
+                }
+            }
+        }
+        LedgerAccountContract.parmMainAccount(_mainAccountNum);
+        LedgerAccountContract.parmValues(valueContracts);
+        dimStorage                          =    DimensionServiceProvider::buildDimensionStorageForLedgerAccount(LedgerAccountContract);
+        dimensionAttributeValueCombination  =    DimensionAttributeValueCombination::find(dimStorage.save());
+        ledgerRecId                         =    dimensionAttributeValueCombination.RecId;
+
+        return ledgerRecId;
+    }
+
+    static str employeeDim(HcmWorker _hcmWorker, Name _attrName)
+
+    {
+        HcmEmployment                   hcmEmployment;
+        DimensionAttributeValueSetItem  setItem;
+        DimensionAttributeValue         dimAttrValue;
+        DimensionAttribute              dimAttribute;
+        ;
+
+        dimAttribute    = DimensionAttribute::findByName(_attrName);
+
+       select hcmEmployment
+            where hcmEmployment.Worker == _hcmWorker.RecId
+              join RecId, DisplayValue from setItem
+              where setItem.DimensionAttributeValueSet ==
+              hcmEmployment.DefaultDimension
+              join dimAttrValue
+              where dimAttrValue.RecId == setItem.DimensionAttributeValue &&
+              dimAttrValue.DimensionAttribute == dimAttribute.RecId       &&
+              dimAttrValue.IsDeleted == false;
+        
+           // info(strFmt("Employee personnel number  = %1  %2 = %3 ",
+           //HcmWorker::find(hcmEmployment.Worker).PersonnelNumber,
+           //dimAttribute.Name, setItem.DisplayValue));
+
+            return  any2Str(setItem.DisplayValue);
+    }
+
+}
