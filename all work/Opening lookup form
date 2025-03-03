@@ -1,0 +1,16 @@
+How to call form from form control for lookup 
+
+ovverdide lookup method and use this code
+
+  InventTrans             inventTrans         = InventTrans::findRecId(str2Int64(element.args().parm()));
+  ItemId  itemid;
+  Args    args;
+
+  //super();
+
+  //Call the form directly.
+  Args = new Args(formStr(LEBInventSerialIdLookup));
+
+  FormRun formRun = classFactory.formRunClass(Args);
+  formRun.init();
+  SerialGroup_FromSerial.performFormLookup(formRun);
