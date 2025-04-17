@@ -53,7 +53,7 @@ public class MT_SMStudentTable extends common
 }
 
 Step 4:
-we create a simple query and add that table in the datasource
+we create a simple query and add that table in the datasource and make dynamic field property to YES.
 
 
 step 6:
@@ -136,6 +136,7 @@ public class MT_SMStudentAgreementWfTypeSubmitManager
 
 
 step9:
+Note: if your WF document no showing document in drop down then build the proj then try again
 create a workflow approval 
 In workflow approval wizard:
 Workflow Document = Ducument that created after creating workflow type
@@ -143,7 +144,7 @@ Document perview field group = field group of your table
 Document Menu item = Menu item of your form that have workflow
 
 step 10:
-add he following code to wftype event handler class that has already created
+add the following code to wftype event handler class that has already created
 /// <summary>
 /// The MT_SMStudentAgreementWfTypeEventHandler workflow event handler.
 /// </summary>
